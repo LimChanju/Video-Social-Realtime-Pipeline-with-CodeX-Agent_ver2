@@ -1,6 +1,7 @@
 # Spark & Delta auto-downloaded garbage
 .jdk/
 .ivy2/
+*.tar.gz
 warehouse/
 metastore_db/
 
