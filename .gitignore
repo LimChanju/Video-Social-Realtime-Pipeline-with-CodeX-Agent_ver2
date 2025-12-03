@@ -1,0 +1,19 @@
+# Spark & Delta auto-downloaded garbage
+.jdk/
+.ivy2/
+warehouse/
+metastore_db/
+
+# Spark checkpoints logs
+**/_spark_metadata/
+**/_delta_log/
+
+# Python environments
+bigdata/
+venv/
+.env
+
+# System files
+*.log
+.DS_Store
+Thumbs.db

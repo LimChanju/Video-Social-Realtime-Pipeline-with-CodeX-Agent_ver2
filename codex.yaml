@@ -1,0 +1,57 @@
+pipeline:
+  name: bigdata_project
+
+stages:
+  landing:
+    command: python 00_fetch_to_landing.py
+    env: .env
+    deps:
+      - libs/session.py
+      - libs/sampling.py
+    outputs:
+      - data/landing/*.json
+
+  bronze_batch:
+    command: python 10_bronze_batch.py
+    env: .env
+    deps:
+      - data/landing
+    outputs:
+      - data/bronze/delta/
+      - data/bronze/_sample
+
+  silver_stream:
+    command: python 20_silver_stream.py
+    env: .env
+    stream: true
+    deps:
+      - data/bronze
+    outputs:
+      - data/silver/*.delta
+
+  gold_features:
+    command: python 30_gold_features.py
+    env: .env
+    deps:
+      - data/silver
+    outputs:
+      - data/gold/*.delta
+
+  train_pareto:
+    command: python 40_train_pareto.py
+    env: .env
+    deps:
+      - data/gold
+    outputs:
+      - mlruns/
+      - models/
+
+  predict_stream:
+    command: python 50_predict_stream.py
+    env: .env
+    optional: true
+    deps:
+      - models/
+      - data/gold
+    outputs:
+      - data/predict/*.delta
