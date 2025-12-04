@@ -1,16 +1,31 @@
-"""Snippet: micro-batch 'prediction' appender (toy)."""
-import os, time
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import current_timestamp
+"""Prediction micro-batch appender:
+- Loads gold/features
+- Computes a simple score (toy) and appends to gold/predictions with timestamp.
+"""
+import os
+from dotenv import load_dotenv
+from pyspark.sql import functions as F
+from libs.session import build_spark
 
-GOLD = os.getenv("GOLD_DIR","data/gold")
-spark = (SparkSession.builder.appName("predict_append_snippet")
-    .config("spark.sql.extensions","io.delta.sql.DeltaSparkSessionExtension")
-    .config("spark.sql.catalog.spark_catalog","org.apache.spark.sql.delta.catalog.DeltaCatalog")
-    .config("spark.sql.warehouse.dir","warehouse").getOrCreate())
+load_dotenv("conf/.env")
+GOLD = os.getenv("GOLD_DIR", "data/gold")
+
+spark = build_spark("predict_append")
 
 features = spark.read.format("delta").load(f"{GOLD}/features")
-pred = features.selectExpr("video_id","engagement_24h as score")                .withColumn("event_time", current_timestamp())
 
-(pred.write.format("delta").mode("append").save(f"{GOLD}/predictions"))
+# Toy scoring: weighted sum of engagement + uniques, normalized
+pred = (
+    features
+    .withColumn("score_raw", F.col("engagement_24h") + 0.1 * F.col("uniq_authors_est"))
+    .withColumn("score", F.col("score_raw") / (F.col("score_raw") + F.lit(1)))
+    .withColumn("event_time", F.current_timestamp())
+    .select("video_id", "score", "event_time")
+)
+
+(
+    pred.write.format("delta")
+    .mode("append")
+    .save(f"{GOLD}/predictions")
+)
 print("Appended predictions (toy).")

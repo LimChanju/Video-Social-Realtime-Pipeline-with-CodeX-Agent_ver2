@@ -1,44 +1,76 @@
-"""Snippet: Streamlit view with CDF/PDF and Bloom presence check (toy).
+"""Streamlit realtime view: CDF/PDF visualization + Bloom presence check + predictions table.
 Run with: streamlit run app/app.py
 """
 import os
+from dotenv import load_dotenv
 import streamlit as st
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import expr, col
+from pyspark.sql import functions as F
+from libs.session import build_spark
 
-GOLD = os.getenv("GOLD_DIR","data/gold")
-SILVER = os.getenv("SILVER_DIR","data/silver")
+load_dotenv("conf/.env")
+GOLD = os.getenv("GOLD_DIR", "data/gold")
+SILVER = os.getenv("SILVER_DIR", "data/silver")
+TOP_PCT = float(os.getenv("TOP_PCT", "0.9"))
 
-st.set_page_config(page_title="Realtime Video Insights (Snippets)", layout="wide")
-query = st.text_input("Search by keyword or video_id", "")
+st.set_page_config(page_title="Realtime Video Insights", layout="wide")
 
-spark = (SparkSession.builder
-    .config("spark.sql.extensions","io.delta.sql.DeltaSparkSessionExtension")
-    .config("spark.sql.catalog.spark_catalog","org.apache.spark.sql.delta.catalog.DeltaCatalog")
-    .config("spark.sql.warehouse.dir","warehouse").getOrCreate())
+spark = build_spark("streamlit_view")
+
+query = st.text_input("영상 ID 검색 (video_id) 또는 키워드", "")
 
 try:
     features = spark.read.format("delta").load(f"{GOLD}/features")
+    predictions = spark.read.format("delta").load(f"{GOLD}/predictions")
     metrics = spark.read.format("delta").load(f"{SILVER}/social_metrics")
-except Exception as e:
-    st.warning("No data yet. Run the jobs first."); st.stop()
+except Exception:
+    st.warning("데이터가 아직 없습니다. 파이프라인을 먼저 실행하세요.")
+    st.stop()
 
-# CDF cut @ 90%
-cut = features.approxQuantile("engagement_24h", [0.90], 0.001)[0]
-st.metric("Top 10% cut (CDF 0.90)", f"{cut:,.2f}")
+col1, col2, col3 = st.columns(3)
+
+# CDF cut for engagement
+cut = features.approxQuantile("engagement_24h", [TOP_PCT], 0.001)[0]
+col1.metric(f"Top {int(TOP_PCT*100)}% cut (engagement_24h)", f"{cut:,.2f}")
 
 # PDF histogram (bucketed)
-hist = (features.selectExpr("width_bucket(engagement_24h, 0, 10000, 30) as bkt")
-        .groupBy("bkt").count()).toPandas()
-if not hist.empty:
-    st.bar_chart(hist.set_index("bkt"))
+hist_df = (
+    features.selectExpr("width_bucket(engagement_24h, 0, 10000, 30) as bucket")
+    .groupBy("bucket").count()
+    .orderBy("bucket")
+).toPandas()
+if not hist_df.empty:
+    col2.bar_chart(hist_df.set_index("bucket"))
 
-# Bloom filter presence check for recent video_ids (toy)
-recent = features.select("video_id")
-bf = recent.agg(expr("bloom_filter(video_id, 100000, 0.01) as bf")).collect()[0]["bf"]
-if query:
-    exists = spark.createDataFrame([(query,)], "video_id string")                   .select(expr(f"might_contain('{bf}', video_id)").alias("maybe")).collect()[0][0]
-    st.info(f"Bloom says existence possible: {exists}")
+# Bloom filter presence check (recent 7d video_id)
+try:
+    recent = spark.read.format("delta").load(f"{GOLD}/features")
+    bf = (
+        recent.agg(F.expr("bloom_filter(video_id, 100000, 0.01) as bf"))
+        .collect()[0]["bf"]
+    )
+    if query:
+        exists = (
+            spark.createDataFrame([(query,)], "video_id string")
+            .select(F.expr("might_contain(bf, video_id)").alias("maybe"), F.lit(bf).alias("bf_tmp"))
+        ).select("maybe").collect()[0][0]
+        col3.info(f"Bloom(최근 데이터) 존재 가능성: {exists}")
+except Exception:
+    col3.warning("Bloom 필터 계산 불가 (데이터 부족).")
 
-df = features if not query else features.filter((col("video_id")==query) | (col("video_id").contains(query)))
-st.dataframe(df.limit(200).toPandas(), use_container_width=True)
+# Filter by query if provided
+filt_features = (
+    features
+    if not query
+    else features.filter((F.col("video_id") == query) | (F.col("video_id").contains(query)))
+)
+filt_preds = (
+    predictions
+    if not query
+    else predictions.filter((F.col("video_id") == query) | (F.col("video_id").contains(query)))
+)
+
+st.subheader("Features (latest)")
+st.dataframe(filt_features.orderBy(F.desc("engagement_24h")).limit(200).toPandas(), use_container_width=True)
+
+st.subheader("Predictions (latest)")
+st.dataframe(filt_preds.orderBy(F.desc("event_time")).limit(200).toPandas(), use_container_width=True)
