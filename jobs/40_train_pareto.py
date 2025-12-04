@@ -3,18 +3,16 @@ Run with:
   spark-submit --packages io.delta:delta-spark_2.12:3.2.0 jobs/40_train_pareto.py
 """
 import os, time
-from pyspark.sql import SparkSession
 from pyspark.ml import Pipeline
-from pyspark.ml.feature import Tokenizer, HashingTF, IDF, VectorAssembler, StringIndexer
+from pyspark.ml.feature import VectorAssembler, StringIndexer
 from pyspark.ml.classification import LogisticRegression, RandomForestClassifier, GBTClassifier
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
+from libs.session import build_spark
+from libs.pareto import pareto_front
 
 GOLD = os.getenv("GOLD_DIR","data/gold")
 
-spark = (SparkSession.builder.appName("pareto_training_snippet")
-    .config("spark.sql.extensions","io.delta.sql.DeltaSparkSessionExtension")
-    .config("spark.sql.catalog.spark_catalog","org.apache.spark.sql.delta.catalog.DeltaCatalog")
-    .config("spark.sql.warehouse.dir","warehouse").getOrCreate())
+spark = build_spark("pareto_training_snippet")
 
 df = spark.read.format("delta").load(f"{GOLD}/features").fillna(0)
 # Minimal features (no text here). In your real pipeline, include text features.
@@ -39,13 +37,11 @@ for name, clf in candidates:
     feat_count = len(feat_cols)
     results.append({"name":name,"aucpr":aucpr,"latency_ms":latency_ms,"feat_count":feat_count})
 
-def dominates(a,b):
-    return (a["aucpr"]>=b["aucpr"] and a["latency_ms"]<=b["latency_ms"] and a["feat_count"]<=b["feat_count"]) and            (a["aucpr"]>b["aucpr"] or a["latency_ms"]<b["latency_ms"] or a["feat_count"]<b["feat_count"])
-
-pareto = []
-for r in results:
-    if not any(dominates(o,r) for o in results if o is not r):
-        pareto.append(r)
+# Pareto front selection using shared util.
+# We maximize aucpr while minimizing latency/feat_count => negate those for maximizing.
+points = [(r["aucpr"], -r["latency_ms"], -r["feat_count"]) for r in results]
+front_pts = set(pareto_front(points, maximize=True))
+pareto = [r for r, p in zip(results, points) if p in front_pts]
 
 print("All:", results)
 print("Pareto-front:", pareto)

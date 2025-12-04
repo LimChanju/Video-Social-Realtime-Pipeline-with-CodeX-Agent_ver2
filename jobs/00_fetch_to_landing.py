@@ -1,8 +1,8 @@
 """Snippet: mock fetcher to drop NDJSON into data/landing.
 - Demonstrates reservoir sampling (Vitter's Algorithm R) on fetched items.
 """
-import os, time, json, random
-from datetime import datetime
+import os, time, random
+from libs.io import write_ndjson
 
 LANDING = os.getenv("LANDING_DIR", "data/landing")
 SAMPLE_OUT = os.path.join("data","bronze","_sample")
@@ -28,14 +28,11 @@ items = [{
 
 # Drop NDJSON file
 fname = os.path.join(LANDING, f"events_{int(time.time())}.json")
-with open(fname, "w", encoding="utf-8") as f:
-    for it in items:
-        f.write(json.dumps(it)+"\n")
+write_ndjson(fname, items)
 print("Wrote:", fname)
 
 # Save small representative sample
 sample = reservoir_sample(items, k=16)
 sname = os.path.join(SAMPLE_OUT, f"sample_{int(time.time())}.json")
-with open(sname, "w", encoding="utf-8") as f:
-    json.dump(sample, f, ensure_ascii=False, indent=2)
+write_ndjson(sname, sample)
 print("Sample saved:", sname)

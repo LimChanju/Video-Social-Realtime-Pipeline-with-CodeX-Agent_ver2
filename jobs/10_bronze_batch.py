@@ -12,10 +12,10 @@
 """
 import os
 from pathlib import Path
-from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
-from pyspark.sql.window import Window
+from libs.session import build_spark
+from libs.sampling import reservoir_by_key
 
 # 기존: BRONZE 디렉토리에 직접 Delta 저장
 # 변경: BRONZE 디렉토리 내에 delta 및 _sample 하위 디렉토리로 분리
@@ -26,13 +26,7 @@ BRONZE_SAMPLE = os.path.join(BRONZE_BASE, "_sample")
 SAMPLE_SIZE = int(os.getenv("RESERVOIR_K", "50"))
 RESERVOIR_KEY = os.getenv("RESERVOIR_KEY", "video_id")
 
-spark = (
-    SparkSession.builder.appName("bronze_batch")
-    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
-    .config("spark.sql.warehouse.dir", "warehouse")
-    .getOrCreate()
-)
+spark = build_spark("bronze_batch")
 
 # 기존: schema 자동 추론
 # 변경: StructType으로 스키마 고정 (원본 스키마 안정성)
@@ -57,17 +51,8 @@ incoming = (
     .withColumn("source", F.lit("mock_api"))
 )
 
-# (A) 삽입 포인트: Reservoir sampling per video_id (pre-Bloom) for quick profiling
-# 변경: video_id 그룹별로 K개만 샘플링 (Spark Window 활용)
-# 목적: Landing 폭증 시 데이터 프로파일링 비용 절감
-rand_col = F.rand()
-window = Window.partitionBy(RESERVOIR_KEY).orderBy(rand_col)
-reservoir_sample = (
-    incoming.withColumn("_rand", rand_col)
-    .withColumn("_rn", F.row_number().over(window))
-    .filter(F.col("_rn") <= SAMPLE_SIZE)
-    .drop("_rand", "_rn")
-)
+# (A) 삽입 포인트: Reservoir sampling per key (pre-Bloom) for quick profiling
+reservoir_sample = reservoir_by_key(incoming, RESERVOIR_KEY, SAMPLE_SIZE)
 
 # bronze/_sample 에 저장
 (reservoir_sample.write \

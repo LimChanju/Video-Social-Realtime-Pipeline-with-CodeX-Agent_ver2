@@ -8,8 +8,8 @@ Then drop JSON files into data/landing.
 """
 
 import os
-from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
+from libs.session import build_spark
 
 # -----------------------------
 # Environment variables
@@ -32,13 +32,7 @@ SLIDE      = os.getenv("WINDOW_SLIDE", "5 minutes")
 # Spark Session
 # -----------------------------
 
-spark = (
-    SparkSession.builder.appName("silver_stream")
-    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
-    .config("spark.sql.warehouse.dir", "warehouse")
-    .getOrCreate()
-)
+spark = build_spark("silver_stream")
 
 # -----------------------------
 # Schema
@@ -105,7 +99,10 @@ win = (
         F.window(F.col("event_time"), WIN, SLIDE),
         F.col("video_id")
     )
-    .count()
+    .agg(
+        F.count(F.lit(1)).alias("count"),
+        F.approx_count_distinct("author_id").alias("uniq_authors_est"), # Spark의 HLL++ 기반 approx_count_distinct 사용
+    )
 )
 
 # -----------------------------
