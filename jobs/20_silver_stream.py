@@ -103,7 +103,7 @@ win = (
     )
     .agg(
         F.count(F.lit(1)).alias("count"),
-        F.approx_count_distinct("author_id").alias("uniq_authors_est"), # Spark의 HLL++ 기반 approx_count_distinct 사용
+        F.approx_count_distinct("author_id").alias("uniq_users_est"), # Spark의 HLL++ 기반 approx_count_distinct 사용
     )
 )
 
