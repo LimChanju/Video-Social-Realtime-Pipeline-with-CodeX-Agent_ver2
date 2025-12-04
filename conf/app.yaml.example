@@ -1,0 +1,12 @@
+# Streamlit / service config example
+app:
+  host: 0.0.0.0
+  port: 8501
+  base_url: /
+  page_title: Realtime Video Insights
+  theme: light  # light|dark
+
+data:
+  gold_dir: ./data/gold
+  silver_dir: ./data/silver
+  top_pct: 0.9

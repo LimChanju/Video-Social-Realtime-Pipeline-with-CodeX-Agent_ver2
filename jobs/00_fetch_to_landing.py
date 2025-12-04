@@ -4,9 +4,11 @@
 import os, time, random
 from dotenv import load_dotenv
 from libs.io import write_ndjson
+from libs.config import load_logging_config
 
 # Load environment variables
 load_dotenv("conf/.env")
+load_logging_config()
 
 LANDING = os.getenv("LANDING_DIR", "data/landing")
 SAMPLE_OUT = os.path.join("data","bronze","_sample")

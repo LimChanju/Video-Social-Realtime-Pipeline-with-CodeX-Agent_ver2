@@ -11,11 +11,13 @@ import os
 from dotenv import load_dotenv
 from pyspark.sql import functions as F
 from libs.session import build_spark
+from libs.config import load_logging_config
 
 # -----------------------------
 # Environment variables
 # -----------------------------
 load_dotenv("conf/.env")
+load_logging_config()
 
 LANDING    = os.getenv("LANDING_DIR", "data/landing")
 SILVER     = os.getenv("SILVER_DIR", "data/silver")

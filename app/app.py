@@ -6,11 +6,14 @@ from dotenv import load_dotenv
 import streamlit as st
 from pyspark.sql import functions as F
 from libs.session import build_spark
+from libs.config import load_app_config, load_logging_config
 
 load_dotenv("conf/.env")
-GOLD = os.getenv("GOLD_DIR", "data/gold")
-SILVER = os.getenv("SILVER_DIR", "data/silver")
-TOP_PCT = float(os.getenv("TOP_PCT", "0.9"))
+load_logging_config()
+cfg = load_app_config()
+GOLD = cfg.get("data", {}).get("gold_dir", os.getenv("GOLD_DIR", "data/gold"))
+SILVER = cfg.get("data", {}).get("silver_dir", os.getenv("SILVER_DIR", "data/silver"))
+TOP_PCT = float(cfg.get("data", {}).get("top_pct", os.getenv("TOP_PCT", "0.9")))
 
 st.set_page_config(page_title="Realtime Video Insights", layout="wide")
 

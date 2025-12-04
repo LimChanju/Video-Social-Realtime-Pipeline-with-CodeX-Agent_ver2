@@ -6,8 +6,10 @@ import os
 from dotenv import load_dotenv
 from pyspark.sql import functions as F
 from libs.session import build_spark
+from libs.config import load_logging_config
 
 load_dotenv("conf/.env")
+load_logging_config()
 GOLD = os.getenv("GOLD_DIR", "data/gold")
 
 spark = build_spark("predict_append")

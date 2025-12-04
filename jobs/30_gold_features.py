@@ -8,8 +8,10 @@ from dotenv import load_dotenv
 from pyspark.sql import functions as F
 from libs.session import build_spark
 from libs.metrics import label_top_pct
+from libs.config import load_logging_config
 
 load_dotenv("conf/.env")
+load_logging_config()
 
 SILVER  = os.getenv("SILVER_DIR", "data/silver")
 GOLD    = os.getenv("GOLD_DIR", "data/gold")

@@ -12,8 +12,10 @@ from pyspark.ml.classification import LogisticRegression, RandomForestClassifier
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from libs.session import build_spark
 from libs.pareto import pareto_front
+from libs.config import load_logging_config
 
 load_dotenv("conf/.env")
+load_logging_config()
 GOLD = os.getenv("GOLD_DIR", "data/gold")
 
 # 모델 training용 Spark 세션 생성
