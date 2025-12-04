@@ -4,9 +4,12 @@ Run with:
 """
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 from pyspark.sql import functions as F
 from libs.session import build_spark
 from libs.metrics import label_top_pct
+
+load_dotenv("conf/.env")
 
 SILVER  = os.getenv("SILVER_DIR", "data/silver")
 GOLD    = os.getenv("GOLD_DIR", "data/gold")

@@ -2,7 +2,11 @@
 - Demonstrates reservoir sampling (Vitter's Algorithm R) on fetched items.
 """
 import os, time, random
+from dotenv import load_dotenv
 from libs.io import write_ndjson
+
+# Load environment variables
+load_dotenv("conf/.env")
 
 LANDING = os.getenv("LANDING_DIR", "data/landing")
 SAMPLE_OUT = os.path.join("data","bronze","_sample")

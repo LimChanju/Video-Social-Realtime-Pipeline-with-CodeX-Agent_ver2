@@ -8,12 +8,14 @@ Then drop JSON files into data/landing.
 """
 
 import os
+from dotenv import load_dotenv
 from pyspark.sql import functions as F
 from libs.session import build_spark
 
 # -----------------------------
 # Environment variables
 # -----------------------------
+load_dotenv("conf/.env")
 
 LANDING    = os.getenv("LANDING_DIR", "data/landing")
 SILVER     = os.getenv("SILVER_DIR", "data/silver")

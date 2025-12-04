@@ -3,6 +3,7 @@ Run with:
   spark-submit --packages io.delta:delta-spark_2.12:3.2.0 jobs/40_train_pareto.py
 """
 import os, time
+from dotenv import load_dotenv
 from pyspark.ml import Pipeline
 from pyspark.ml.feature import VectorAssembler, StringIndexer
 from pyspark.ml.classification import LogisticRegression, RandomForestClassifier, GBTClassifier
@@ -10,6 +11,7 @@ from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from libs.session import build_spark
 from libs.pareto import pareto_front
 
+load_dotenv("conf/.env")
 GOLD = os.getenv("GOLD_DIR","data/gold")
 
 spark = build_spark("pareto_training_snippet")

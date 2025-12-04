@@ -12,6 +12,7 @@
 """
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
 from libs.session import build_spark
@@ -19,6 +20,9 @@ from libs.sampling import reservoir_by_key
 
 # 기존: BRONZE 디렉토리에 직접 Delta 저장
 # 변경: BRONZE 디렉토리 내에 delta 및 _sample 하위 디렉토리로 분리
+# Load environment variables
+load_dotenv("conf/.env")
+
 LANDING = os.getenv("LANDING_DIR", "data/landing")
 BRONZE_BASE = os.getenv("BRONZE_DIR", "data/bronze")
 BRONZE_DELTA = os.path.join(BRONZE_BASE, "delta")
