@@ -6,6 +6,9 @@ warehouse/
 metastore_db/
 /chk
 
+# Data
+/data
+
 # Spark checkpoints logs
 **/_spark_metadata/
 **/_delta_log/

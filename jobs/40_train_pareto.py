@@ -23,7 +23,7 @@ spark = build_spark("pareto_training")
 
 # Load labeled features
 df = spark.read.format("delta").load(f"{GOLD}/features").fillna(0)
-feat_cols = ["engagement_24h", "uniq_users_est"]
+feat_cols = ["engagement_24h", "uniq_authors_est"]
 
 # Basic index/assemble for tabular features (extend with text/vector features as needed)
 si = StringIndexer(inputCol="label", outputCol="label_idx")

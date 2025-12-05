@@ -19,6 +19,14 @@ st.set_page_config(page_title="Realtime Video Insights", layout="wide")
 
 spark = build_spark("streamlit_view")
 
+# Auto-refresh 옵션 (비활성화)
+refresh = st.sidebar.button("Refresh data")
+if refresh:
+    if hasattr(st, "experimental_rerun"):
+        st.experimental_rerun()
+    elif hasattr(st, "rerun"):
+        st.rerun()
+
 query = st.text_input("영상 ID 검색 (video_id) 또는 키워드", "")
 
 try:
@@ -44,21 +52,41 @@ hist_df = (
 if not hist_df.empty:
     col2.bar_chart(hist_df.set_index("bucket"))
 
-# Bloom filter presence check (recent 7d video_id)
+# Bloom presence check (최근 7일; fallback: gold)
 try:
-    recent = spark.read.format("delta").load(f"{GOLD}/features")
-    bf = (
-        recent.agg(F.expr("bloom_filter(video_id, 100000, 0.01) as bf"))
-        .collect()[0]["bf"]
+    recent_vids = (
+        metrics
+        .filter(F.col("window.end") >= F.date_sub(F.current_timestamp(), 7))
+        .select("video_id")
+        .distinct()
     )
-    if query:
-        exists = (
-            spark.createDataFrame([(query,)], "video_id string")
-            .select(F.expr("might_contain(bf, video_id)").alias("maybe"), F.lit(bf).alias("bf_tmp"))
-        ).select("maybe").collect()[0][0]
-        col3.info(f"Bloom(최근 데이터) 존재 가능성: {exists}")
-except Exception:
-    col3.warning("Bloom 필터 계산 불가 (데이터 부족).")
+    recent_count = recent_vids.count()
+    col3.metric("Recent video_ids (7d)", recent_count)
+    bloom_source = recent_vids if recent_count > 0 else features.select("video_id").distinct()
+
+    def check_with_bloom(df, q):
+        """Try bloom_filter/might_contain; fallback to exact match if functions missing."""
+        try:
+            bf_row = df.agg(F.bloom_filter("video_id", 100000, 0.01).alias("bf")).collect()[0]
+            bf = bf_row["bf"]
+            exists = (
+                spark.createDataFrame([(q,)], "video_id string")
+                .select(F.might_contain(F.lit(bf), F.col("video_id")).alias("maybe"))
+            ).collect()[0]["maybe"]
+            return exists, "bloom"
+        except Exception:
+            exists = df.filter(F.col("video_id") == q).head(1) is not None
+            return exists, "exact"
+
+    if bloom_source.head(1) and query:
+        exists, mode = check_with_bloom(bloom_source, query)
+        source_name = "최근 7일" if recent_count > 0 else "gold"
+        note = "Bloom" if mode == "bloom" else "Exact"
+        col3.info(f"{note} 기반 존재 여부 ({source_name}): {exists}")
+    elif not bloom_source.head(1):
+        col3.warning("Bloom 계산 불가: video_id 없음.")
+except Exception as e:
+    col3.warning(f"Bloom 필터 계산 실패: {e}")
 
 # Filter by query if provided
 filt_features = (

@@ -1,0 +1,48 @@
+# End-to-end pipeline runner (sequential commands).
+# Usage: adapt paths/JAVA_HOME as needed, then run each step in order.
+
+env:
+  PYTHONPATH: "."
+  JAVA_HOME: "./.jdk/temurin11"
+  # 기본 Delta 패키지 + 로컬 소켓 설정
+  SPARK_OPTS: >
+    SPARK_LOCAL_IP=127.0.0.1 SPARK_DRIVER_HOST=127.0.0.1
+    PYSPARK_SUBMIT_ARGS="--conf spark.jars.ivy=$(pwd)/.ivy2 --packages io.delta:delta-spark_2.12:3.2.0 pyspark-shell"
+  # 실버 스트림용 autoMerge (스키마 증가 시)
+  SPARK_OPTS_STREAM: >
+    SPARK_LOCAL_IP=127.0.0.1 SPARK_DRIVER_HOST=127.0.0.1
+    PYSPARK_SUBMIT_ARGS="--conf spark.databricks.delta.schema.autoMerge.enabled=true --conf spark.jars.ivy=$(pwd)/.ivy2 --packages io.delta:delta-spark_2.12:3.2.0 pyspark-shell"
+
+steps:
+  - name: make_sample_data
+    run: bash scripts/make_sample_data.sh
+
+  - name: bronze_batch
+    run: |
+      PYTHONPATH=${PYTHONPATH} JAVA_HOME=${JAVA_HOME} PATH="${JAVA_HOME}/bin:${PATH}" \
+      ${SPARK_OPTS} python3 jobs/10_bronze_batch.py
+
+  - name: silver_stream
+    note: "Run in its own terminal; keep alive. Stop with Ctrl+C."
+    run: |
+      PYTHONPATH=${PYTHONPATH} JAVA_HOME=${JAVA_HOME} PATH="${JAVA_HOME}/bin:${PATH}" \
+      ${SPARK_OPTS_STREAM} python3 jobs/20_silver_stream.py
+
+  - name: gold_features
+    run: |
+      PYTHONPATH=${PYTHONPATH} JAVA_HOME=${JAVA_HOME} PATH="${JAVA_HOME}/bin:${PATH}" \
+      ${SPARK_OPTS} python3 jobs/30_gold_features.py
+
+  - name: pareto_training
+    run: |
+      PYTHONPATH=${PYTHONPATH} JAVA_HOME=${JAVA_HOME} PATH="${JAVA_HOME}/bin:${PATH}" \
+      ${SPARK_OPTS} python3 jobs/40_train_pareto.py
+
+  - name: predict_append
+    run: |
+      PYTHONPATH=${PYTHONPATH} JAVA_HOME=${JAVA_HOME} PATH="${JAVA_HOME}/bin:${PATH}" \
+      ${SPARK_OPTS} python3 jobs/50_predict_stream.py
+
+  - name: streamlit_app
+    note: "Serve the dashboard; open http://localhost:8501"
+    run: PYTHONPATH=${PYTHONPATH} streamlit run app/app.py
